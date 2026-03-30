@@ -1,0 +1,75 @@
+{{- if .Values.clamav.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stalwart.fullname" . }}-clamav
+  labels:
+    {{- include "stalwart.clamav.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.clamav.replicas }}
+  selector:
+    matchLabels:
+      {{- include "stalwart.clamav.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "stalwart.clamav.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: clamav
+          image: "{{ .Values.clamav.image.repository }}:{{ .Values.clamav.image.tag }}"
+          imagePullPolicy: {{ .Values.clamav.image.pullPolicy }}
+          ports:
+            - name: clamd
+              containerPort: {{ .Values.clamav.service.port }}
+              protocol: TCP
+          volumeMounts:
+            {{- if .Values.clamav.persistence.enabled }}
+            - name: clamav-db
+              mountPath: /var/lib/clamav
+            {{- end }}
+          {{- with .Values.clamav.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        {{- if .Values.clamav.persistence.enabled }}
+        - name: clamav-db
+          persistentVolumeClaim:
+            claimName: {{ include "stalwart.fullname" . }}-clamav
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stalwart.fullname" . }}-clamav
+  labels:
+    {{- include "stalwart.clamav.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "stalwart.clamav.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: clamd
+      port: {{ .Values.clamav.service.port }}
+      targetPort: clamd
+      protocol: TCP
+{{- if .Values.clamav.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stalwart.fullname" . }}-clamav
+  labels:
+    {{- include "stalwart.clamav.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.clamav.persistence.storageClass }}
+  storageClassName: {{ .Values.clamav.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.clamav.persistence.size }}
+{{- end }}
+{{- end }}

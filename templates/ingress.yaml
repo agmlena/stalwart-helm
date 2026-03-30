@@ -1,0 +1,56 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "stalwart.fullname" . }}
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                {{- if eq .service "stalwart" }}
+                name: {{ include "stalwart.fullname" $ }}-web
+                port:
+                  number: 8080
+                {{- else if eq .service "webmail" }}
+                name: {{ include "stalwart.fullname" $ }}-webmail
+                port:
+                  number: {{ $.Values.webmail.service.port }}
+                {{- end }}
+          {{- end }}
+          {{- if $.Values.webmail.enabled }}
+          - path: {{ $.Values.webmail.ingressPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "stalwart.fullname" $ }}-webmail
+                port:
+                  number: {{ $.Values.webmail.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}

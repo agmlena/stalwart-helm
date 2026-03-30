@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stalwart.fullname" . }}
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.stalwart.replicas }}
+  {{- with .Values.stalwart.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "stalwart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.stalwart.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "stalwart.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "stalwart.serviceAccountName" . }}
+      {{- with .Values.stalwart.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: stalwart
+          image: {{ include "stalwart.image" . }}
+          imagePullPolicy: {{ .Values.stalwart.image.pullPolicy }}
+          {{- with .Values.stalwart.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: smtp
+              containerPort: {{ .Values.stalwart.listeners.smtp.port }}
+              protocol: TCP
+            - name: smtps
+              containerPort: {{ .Values.stalwart.listeners.smtps.port }}
+              protocol: TCP
+            - name: submission
+              containerPort: {{ .Values.stalwart.listeners.submission.port }}
+              protocol: TCP
+            - name: imap
+              containerPort: {{ .Values.stalwart.listeners.imap.port }}
+              protocol: TCP
+            - name: imaps
+              containerPort: {{ .Values.stalwart.listeners.imaps.port }}
+              protocol: TCP
+            - name: sieve
+              containerPort: {{ .Values.stalwart.listeners.sieve.port }}
+              protocol: TCP
+            - name: https
+              containerPort: {{ .Values.stalwart.listeners.https.port }}
+              protocol: TCP
+            - name: http
+              containerPort: {{ .Values.stalwart.listeners.http.port }}
+              protocol: TCP
+          {{- with .Values.stalwart.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.stalwart.storage.dataDir }}
+            - name: config
+              mountPath: /opt/stalwart-mail/etc/config.toml
+              subPath: config.toml
+            {{- with .Values.stalwart.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.stalwart.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.stalwart.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.stalwart.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.stalwart.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.stalwart.persistence.existingClaim | default (printf "%s-data" (include "stalwart.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: config
+          configMap:
+            name: {{ include "stalwart.fullname" . }}
+        {{- with .Values.stalwart.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.stalwart.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stalwart.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stalwart.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

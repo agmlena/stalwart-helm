@@ -1,0 +1,19 @@
+apiVersion: v2
+name: stalwart-mail
+description: Stalwart Mail Server - full mail stack (SMTP, IMAP, JMAP, CalDAV, CardDAV) with optional webmail and antivirus
+type: application
+version: 0.1.0
+appVersion: "0.14.0"
+home: https://stalw.art
+sources:
+  - https://github.com/stalwartlabs/stalwart
+keywords:
+  - mail
+  - email
+  - smtp
+  - imap
+  - jmap
+  - caldav
+  - carddav
+maintainers:
+  - name: arthur

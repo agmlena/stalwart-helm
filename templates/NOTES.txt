@@ -1,0 +1,36 @@
+Stalwart Mail Server has been deployed.
+
+1. Access the admin UI:
+{{- if .Values.ingress.enabled }}
+   https://{{ (index .Values.ingress.hosts 0).host }}
+{{- else }}
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "stalwart.fullname" . }}-web 8080:8080
+   Then open http://localhost:8080
+{{- end }}
+
+2. Mail service:
+{{- if eq .Values.mailService.type "LoadBalancer" }}
+   External IP: kubectl get svc -n {{ .Release.Namespace }} {{ include "stalwart.fullname" . }}-mail -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+{{- end }}
+   SMTP:  port 25 / 465 (TLS) / 587 (submission)
+   IMAP:  port 143 / 993 (TLS)
+   Sieve: port 4190
+
+3. Set your initial admin password on first access to the web UI.
+
+4. Point your MX records to the LoadBalancer IP:
+   example.com.  IN  MX  10  {{ .Values.hostname }}.
+{{- if .Values.webmail.enabled }}
+
+5. Webmail (SnappyMail):
+{{- if .Values.ingress.enabled }}
+   https://{{ (index .Values.ingress.hosts 0).host }}{{ .Values.webmail.ingressPath }}
+{{- else }}
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "stalwart.fullname" . }}-webmail {{ .Values.webmail.service.port }}:{{ .Values.webmail.service.port }}
+{{- end }}
+{{- end }}
+{{- if .Values.clamav.enabled }}
+
+6. ClamAV is running at {{ include "stalwart.fullname" . }}-clamav:{{ .Values.clamav.service.port }}
+   Configure Stalwart antivirus integration via the admin UI.
+{{- end }}

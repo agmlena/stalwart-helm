@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "stalwart.fullname" . }}
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+data:
+  config.toml: |
+    [server]
+    hostname = {{ .Values.hostname | quote }}
+
+    [server.listener.smtp]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.smtp.port }}"]
+    protocol = "smtp"
+
+    [server.listener.smtps]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.smtps.port }}"]
+    protocol = "smtp"
+    tls.implicit = true
+
+    [server.listener.submission]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.submission.port }}"]
+    protocol = "smtp"
+
+    [server.listener.imaptls]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.imaps.port }}"]
+    protocol = "imap"
+    tls.implicit = true
+
+    [server.listener.imap]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.imap.port }}"]
+    protocol = "imap"
+
+    [server.listener.sieve]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.sieve.port }}"]
+    protocol = "managesieve"
+
+    [server.listener.https]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.https.port }}"]
+    protocol = "http"
+    tls.implicit = true
+
+    [server.listener.http]
+    bind = ["0.0.0.0:{{ .Values.stalwart.listeners.http.port }}"]
+    protocol = "http"
+
+    [storage]
+    data = {{ .Values.stalwart.storage.backend | quote }}
+    blob = {{ .Values.stalwart.storage.backend | quote }}
+    fts = {{ .Values.stalwart.storage.backend | quote }}
+    lookup = {{ .Values.stalwart.storage.backend | quote }}
+    directory = "internal"
+
+    [store.{{ .Values.stalwart.storage.backend }}]
+    type = {{ .Values.stalwart.storage.backend | quote }}
+    path = {{ .Values.stalwart.storage.dataDir | quote }}
+
+    [directory.internal]
+    type = "internal"
+    store = {{ .Values.stalwart.storage.backend | quote }}
+
+    [tracer.stdout]
+    type = "stdout"
+    level = {{ .Values.stalwart.logLevel | quote }}
+    enable = true

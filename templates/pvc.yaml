@@ -1,0 +1,17 @@
+{{- if and .Values.stalwart.persistence.enabled (not .Values.stalwart.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stalwart.fullname" . }}-data
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.stalwart.persistence.accessMode }}
+  {{- if .Values.stalwart.persistence.storageClass }}
+  storageClassName: {{ .Values.stalwart.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.stalwart.persistence.size }}
+{{- end }}

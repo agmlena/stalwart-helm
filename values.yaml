@@ -1,0 +1,231 @@
+# -- Stalwart Mail Server Helm Chart Values
+
+# -- Mail server hostname (FQDN)
+hostname: mail.example.com
+
+stalwart:
+  image:
+    repository: stalwartlabs/stalwart
+    tag: ""  # defaults to appVersion
+    pullPolicy: IfNotPresent
+
+  # -- Number of replicas. Only 1 supported with RocksDB backend.
+  replicas: 1
+
+  # -- Deployment strategy. Use Recreate for RocksDB (single-writer).
+  strategy:
+    type: Recreate
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  # -- Storage backend configuration
+  storage:
+    # -- Backend type: rocksdb, foundationdb, postgres, mysql, sqlite
+    backend: rocksdb
+    # -- Data directory inside the container
+    dataDir: /opt/stalwart-mail/data
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 50Gi
+    # -- Use an existing PVC instead of creating one
+    existingClaim: ""
+
+  # -- Extra environment variables
+  env: []
+  #   - name: FOO
+  #     value: bar
+
+  # -- Extra volume mounts for the stalwart container
+  extraVolumeMounts: []
+
+  # -- Extra volumes for the pod
+  extraVolumes: []
+
+  # -- Node selector
+  nodeSelector: {}
+
+  # -- Tolerations
+  tolerations: []
+
+  # -- Affinity rules
+  affinity: {}
+
+  # -- Pod annotations
+  podAnnotations: {}
+
+  # -- Pod security context
+  podSecurityContext: {}
+
+  # -- Container security context
+  securityContext: {}
+
+  # -- Stalwart TOML config overrides (merged into generated config)
+  # Use this for settings not covered by values. See https://stalw.art/docs/
+  configOverrides: {}
+  #   spam-filter.header.antivirus:
+  #     enable: true
+
+  # -- Listeners configuration
+  listeners:
+    smtp:
+      port: 25
+    smtps:
+      port: 465
+    submission:
+      port: 587
+    imap:
+      port: 143
+    imaps:
+      port: 993
+    sieve:
+      port: 4190
+    https:
+      port: 443
+    http:
+      port: 8080
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /healthz/live
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /healthz/ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+  # -- Log level: trace, debug, info, warn, error
+  logLevel: info
+
+# -- Mail service (LoadBalancer for SMTP/IMAP ports)
+mailService:
+  type: LoadBalancer
+  annotations: {}
+  #   metallb.universe.tf/address-pool: mail-pool
+  #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  # -- Preserve source IP for SPF checks. Set to Local for production.
+  externalTrafficPolicy: Local
+  # -- Static IP if supported by provider
+  loadBalancerIP: ""
+
+# -- Web service (ClusterIP, fronted by Ingress)
+webService:
+  type: ClusterIP
+  annotations: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -- Ingress for web UI, JMAP, CalDAV, CardDAV, webmail
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  #   nginx.ingress.kubernetes.io/proxy-body-size: 50m
+  hosts:
+    - host: mail.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: stalwart
+  tls: []
+  #   - secretName: mail-tls
+  #     hosts:
+  #       - mail.example.com
+
+# -- TLS certificate via cert-manager
+certificate:
+  enabled: false
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: []
+  #   - mail.example.com
+  secretName: mail-tls
+
+# -- SnappyMail webmail (optional)
+webmail:
+  enabled: false
+  image:
+    repository: djmaze/snappymail
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  service:
+    port: 8888
+  # -- Path prefix in ingress
+  ingressPath: /webmail
+
+# -- ClamAV antivirus (optional)
+clamav:
+  enabled: false
+  image:
+    repository: clamav/clamav
+    tag: stable
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 5Gi
+  service:
+    port: 3310
+
+# -- Backup via restic (optional)
+backup:
+  enabled: false
+  schedule: "0 3 * * *"
+  restic:
+    repository: ""  # e.g., s3:s3.example.com/mail-backups
+    # -- Name of existing secret with RESTIC_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    existingSecret: ""
+  retention:
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# -- Prometheus ServiceMonitor (optional)
+metrics:
+  enabled: false
+  interval: 30s
+  path: /metrics
+  port: http

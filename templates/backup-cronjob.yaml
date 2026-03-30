@@ -1,0 +1,47 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "stalwart.fullname" . }}-backup
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: restic/restic:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  restic -r {{ .Values.backup.restic.repository }} snapshots || \
+                    restic -r {{ .Values.backup.restic.repository }} init
+                  restic -r {{ .Values.backup.restic.repository }} backup /data \
+                    --tag stalwart \
+                    --tag "$(date +%Y-%m-%d)"
+                  restic -r {{ .Values.backup.restic.repository }} forget \
+                    --keep-daily {{ .Values.backup.retention.keepDaily }} \
+                    --keep-weekly {{ .Values.backup.retention.keepWeekly }} \
+                    --keep-monthly {{ .Values.backup.retention.keepMonthly }} \
+                    --prune
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.backup.restic.existingSecret }}
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ .Values.stalwart.persistence.existingClaim | default (printf "%s-data" (include "stalwart.fullname" .)) }}
+          restartPolicy: OnFailure
+{{- end }}

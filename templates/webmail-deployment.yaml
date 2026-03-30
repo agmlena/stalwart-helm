@@ -1,0 +1,46 @@
+{{- if .Values.webmail.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stalwart.fullname" . }}-webmail
+  labels:
+    {{- include "stalwart.webmail.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.webmail.replicas }}
+  selector:
+    matchLabels:
+      {{- include "stalwart.webmail.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "stalwart.webmail.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: snappymail
+          image: "{{ .Values.webmail.image.repository }}:{{ .Values.webmail.image.tag }}"
+          imagePullPolicy: {{ .Values.webmail.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.webmail.service.port }}
+              protocol: TCP
+          {{- with .Values.webmail.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stalwart.fullname" . }}-webmail
+  labels:
+    {{- include "stalwart.webmail.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "stalwart.webmail.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.webmail.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
