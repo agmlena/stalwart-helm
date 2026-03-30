@@ -1,0 +1,18 @@
+{{- if and .Values.backup.enabled (eq .Values.backup.method "pgdump") (eq .Values.stalwart.storage.backend "postgres") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stalwart.fullname" . }}-backup
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.backup.pgdump.persistence.storageClass }}
+  storageClassName: {{ .Values.backup.pgdump.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.pgdump.persistence.size }}
+{{- end }}

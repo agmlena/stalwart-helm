@@ -20,9 +20,22 @@ Stalwart Mail Server has been deployed.
 
 4. Point your MX records to the LoadBalancer IP:
    example.com.  IN  MX  10  {{ .Values.hostname }}.
+{{- if eq .Values.stalwart.storage.backend "postgres" }}
+
+5. PostgreSQL backend:
+   Host:     {{ .Values.stalwart.storage.postgres.host }}:{{ .Values.stalwart.storage.postgres.port }}
+   Database: {{ .Values.stalwart.storage.postgres.database }}
+   User:     {{ .Values.stalwart.storage.postgres.user }}
+   Secret:   {{ include "stalwart.dbSecretName" . }}
+  {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
+   Blob store: S3 ({{ .Values.stalwart.storage.s3.bucket }})
+  {{- else }}
+   Blob store: PostgreSQL (same database)
+  {{- end }}
+{{- end }}
 {{- if .Values.webmail.enabled }}
 
-5. Webmail (SnappyMail):
+{{ if eq .Values.stalwart.storage.backend "postgres" }}6{{ else }}5{{ end }}. Webmail (SnappyMail):
 {{- if .Values.ingress.enabled }}
    https://{{ (index .Values.ingress.hosts 0).host }}{{ .Values.webmail.ingressPath }}
 {{- else }}
@@ -31,6 +44,19 @@ Stalwart Mail Server has been deployed.
 {{- end }}
 {{- if .Values.clamav.enabled }}
 
-6. ClamAV is running at {{ include "stalwart.fullname" . }}-clamav:{{ .Values.clamav.service.port }}
+{{ if eq .Values.stalwart.storage.backend "postgres" }}7{{ else }}6{{ end }}. ClamAV is running at {{ include "stalwart.fullname" . }}-clamav:{{ .Values.clamav.service.port }}
    Configure Stalwart antivirus integration via the admin UI.
+{{- end }}
+{{- if .Values.backup.enabled }}
+
+Backups:
+{{- if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump-restic") }}
+   Method:   pg_dump → restic ({{ .Values.backup.restic.repository }})
+{{- else if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump") }}
+   Method:   pg_dump to PVC ({{ include "stalwart.fullname" . }}-backup)
+   Restore:  pg_restore -h HOST -U USER -d DB /backup/stalwart-YYYYMMDD-HHMMSS.dump
+{{- else }}
+   Method:   restic ({{ .Values.backup.restic.repository }})
+{{- end }}
+   Schedule: {{ .Values.backup.schedule }}
 {{- end }}

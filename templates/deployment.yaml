@@ -28,6 +28,22 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if eq .Values.stalwart.storage.backend "postgres" }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17-alpine
+          command: ['sh', '-c']
+          args:
+            - |
+              until pg_isready \
+                -h {{ .Values.stalwart.storage.postgres.host | quote }} \
+                -p {{ .Values.stalwart.storage.postgres.port }} \
+                -U {{ .Values.stalwart.storage.postgres.user | quote }}; do
+                echo "Waiting for PostgreSQL at {{ .Values.stalwart.storage.postgres.host }}:{{ .Values.stalwart.storage.postgres.port }}..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready."
+      {{- end }}
       containers:
         - name: stalwart
           image: {{ include "stalwart.image" . }}
@@ -61,10 +77,29 @@ spec:
             - name: http
               containerPort: {{ .Values.stalwart.listeners.http.port }}
               protocol: TCP
-          {{- with .Values.stalwart.env }}
           env:
+            {{- if eq .Values.stalwart.storage.backend "postgres" }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.dbSecretName" . }}
+                  key: {{ .Values.stalwart.storage.postgres.secretPasswordKey }}
+            {{- end }}
+            {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.s3SecretName" . }}
+                  key: {{ .Values.stalwart.storage.s3.secretAccessKeyKey }}
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.s3SecretName" . }}
+                  key: {{ .Values.stalwart.storage.s3.secretSecretKeyKey }}
+            {{- end }}
+            {{- with .Values.stalwart.env }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: {{ .Values.stalwart.storage.dataDir }}

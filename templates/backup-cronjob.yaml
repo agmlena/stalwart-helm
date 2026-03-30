@@ -11,19 +11,133 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+          labels:
+            {{- include "stalwart.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
         spec:
+          {{- if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump-restic") }}
+          # Two-stage backup: pg_dump (init) → restic push (main)
+          initContainers:
+            - name: pg-dump
+              image: postgres:17-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  DUMP_FILE="/staging/stalwart-$(date +%Y%m%d-%H%M%S).dump"
+                  echo "Dumping PostgreSQL database {{ .Values.stalwart.storage.postgres.database }}..."
+                  PGPASSWORD="$DB_PASSWORD" pg_dump \
+                    -h {{ .Values.stalwart.storage.postgres.host | quote }} \
+                    -p {{ .Values.stalwart.storage.postgres.port }} \
+                    -U {{ .Values.stalwart.storage.postgres.user | quote }} \
+                    -d {{ .Values.stalwart.storage.postgres.database | quote }} \
+                    -Fc -f "$DUMP_FILE"
+                  echo "Dump complete: $(du -h "$DUMP_FILE" | cut -f1)"
+              env:
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretPasswordKey }}
+              volumeMounts:
+                - name: staging
+                  mountPath: /staging
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
           containers:
-            - name: backup
+            - name: restic-push
               image: restic/restic:latest
               command: ["/bin/sh", "-c"]
               args:
                 - |
-                  restic -r {{ .Values.backup.restic.repository }} snapshots || \
-                    restic -r {{ .Values.backup.restic.repository }} init
-                  restic -r {{ .Values.backup.restic.repository }} backup /data \
+                  set -e
+                  restic -r {{ .Values.backup.restic.repository | quote }} snapshots >/dev/null 2>&1 || \
+                    restic -r {{ .Values.backup.restic.repository | quote }} init
+                  echo "Pushing dump to restic..."
+                  restic -r {{ .Values.backup.restic.repository | quote }} backup /staging \
                     --tag stalwart \
                     --tag "$(date +%Y-%m-%d)"
-                  restic -r {{ .Values.backup.restic.repository }} forget \
+                  echo "Applying retention policy..."
+                  restic -r {{ .Values.backup.restic.repository | quote }} forget \
+                    --keep-daily {{ .Values.backup.retention.keepDaily }} \
+                    --keep-weekly {{ .Values.backup.retention.keepWeekly }} \
+                    --keep-monthly {{ .Values.backup.retention.keepMonthly }} \
+                    --prune
+                  echo "Backup complete."
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.backup.restic.existingSecret }}
+              volumeMounts:
+                - name: staging
+                  mountPath: /staging
+                  readOnly: true
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          volumes:
+            - name: staging
+              emptyDir:
+                sizeLimit: {{ .Values.backup.pgdump.persistence.size }}
+
+          {{- else if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump") }}
+          # Simple pg_dump to PVC with file rotation
+          containers:
+            - name: pg-dump
+              image: postgres:17-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  DUMP_FILE="/backup/stalwart-$(date +%Y%m%d-%H%M%S).dump"
+                  echo "Dumping PostgreSQL database {{ .Values.stalwart.storage.postgres.database }}..."
+                  PGPASSWORD="$DB_PASSWORD" pg_dump \
+                    -h {{ .Values.stalwart.storage.postgres.host | quote }} \
+                    -p {{ .Values.stalwart.storage.postgres.port }} \
+                    -U {{ .Values.stalwart.storage.postgres.user | quote }} \
+                    -d {{ .Values.stalwart.storage.postgres.database | quote }} \
+                    -Fc -f "$DUMP_FILE"
+                  echo "Dump complete: $(du -h "$DUMP_FILE" | cut -f1)"
+                  # Rotate: keep only the latest N dumps
+                  ls -t /backup/stalwart-*.dump 2>/dev/null | tail -n +{{ add1 .Values.backup.pgdump.retainCount }} | xargs -r rm -v
+                  echo "Retained dumps:"
+                  ls -lh /backup/stalwart-*.dump
+              env:
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretPasswordKey }}
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              {{- with .Values.backup.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ include "stalwart.fullname" . }}-backup
+
+          {{- else }}
+          # RocksDB: restic backup of the data PVC
+          containers:
+            - name: restic
+              image: restic/restic:latest
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  restic -r {{ .Values.backup.restic.repository | quote }} snapshots >/dev/null 2>&1 || \
+                    restic -r {{ .Values.backup.restic.repository | quote }} init
+                  restic -r {{ .Values.backup.restic.repository | quote }} backup /data \
+                    --tag stalwart \
+                    --tag "$(date +%Y-%m-%d)"
+                  restic -r {{ .Values.backup.restic.repository | quote }} forget \
                     --keep-daily {{ .Values.backup.retention.keepDaily }} \
                     --keep-weekly {{ .Values.backup.retention.keepWeekly }} \
                     --keep-monthly {{ .Values.backup.retention.keepMonthly }} \
@@ -43,5 +157,6 @@ spec:
             - name: data
               persistentVolumeClaim:
                 claimName: {{ .Values.stalwart.persistence.existingClaim | default (printf "%s-data" (include "stalwart.fullname" .)) }}
+          {{- end }}
           restartPolicy: OnFailure
 {{- end }}

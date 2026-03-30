@@ -65,6 +65,28 @@ Stalwart image
 {{- end }}
 
 {{/*
+Database secret name — returns existingSecret if set, otherwise the chart-generated secret name.
+*/}}
+{{- define "stalwart.dbSecretName" -}}
+{{- if .Values.stalwart.storage.postgres.existingSecret }}
+{{- .Values.stalwart.storage.postgres.existingSecret }}
+{{- else }}
+{{- printf "%s-db" (include "stalwart.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+S3 secret name — returns existingSecret if set, otherwise the chart-generated secret name.
+*/}}
+{{- define "stalwart.s3SecretName" -}}
+{{- if .Values.stalwart.storage.s3.existingSecret }}
+{{- .Values.stalwart.storage.s3.existingSecret }}
+{{- else }}
+{{- printf "%s-s3" (include "stalwart.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
 Webmail labels
 */}}
 {{- define "stalwart.webmail.labels" -}}

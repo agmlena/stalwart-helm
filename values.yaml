@@ -9,12 +9,15 @@ stalwart:
     tag: ""  # defaults to appVersion
     pullPolicy: IfNotPresent
 
-  # -- Number of replicas. Only 1 supported with RocksDB backend.
+  # -- Number of replicas. >1 supported with PostgreSQL backend.
   replicas: 1
 
-  # -- Deployment strategy. Use Recreate for RocksDB (single-writer).
+  # -- Deployment strategy. RollingUpdate is safe with PostgreSQL (no local state).
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
 
   resources:
     requests:
@@ -24,19 +27,63 @@ stalwart:
       cpu: "2"
       memory: 2Gi
 
-  # -- Storage backend configuration
+  # ---------------------------------------------------------------------------
+  # Storage backend configuration
+  # ---------------------------------------------------------------------------
   storage:
-    # -- Backend type: rocksdb, foundationdb, postgres, mysql, sqlite
-    backend: rocksdb
-    # -- Data directory inside the container
+    # -- Primary backend for data, fts, and lookup stores.
+    # Supported: postgres, rocksdb
+    backend: postgres
+
+    # -- Blob storage backend. Where email message bodies and attachments are stored.
+    # "postgres" = same database as the primary backend (simplest)
+    # "s3"       = S3-compatible object storage (scalable; configure storage.s3 below)
+    blobBackend: postgres
+
+    # -- PostgreSQL connection (required when backend=postgres)
+    postgres:
+      host: ""
+      port: 5432
+      database: stalwart
+      user: stalwart
+      # -- Password (ignored if existingSecret is set)
+      password: ""
+      # -- Use an existing Secret for the database password
+      existingSecret: ""
+      # -- Key within the Secret that holds the password
+      secretPasswordKey: password
+      tls:
+        enabled: false
+        allowInvalidCerts: false
+      pool:
+        maxConnections: 10
+
+    # -- S3 blob storage (required when blobBackend=s3)
+    s3:
+      bucket: ""
+      region: us-east-1
+      # -- Custom endpoint for S3-compatible stores (MinIO, Ceph, etc.)
+      endpoint: ""
+      # -- Credentials (ignored if existingSecret is set)
+      accessKey: ""
+      secretKey: ""
+      # -- Use an existing Secret for S3 credentials
+      existingSecret: ""
+      # -- Keys within the Secret
+      secretAccessKeyKey: access-key
+      secretSecretKeyKey: secret-key
+      timeout: "30s"
+
+    # -- Local data directory inside the container (used by RocksDB, or for temp/cache)
     dataDir: /opt/stalwart-mail/data
 
+  # -- Local persistence. Not required with PostgreSQL backend (all state is in the DB).
+  # Enable only if you need local disk for caching or if using RocksDB.
   persistence:
-    enabled: true
+    enabled: false
     storageClass: ""
     accessMode: ReadWriteOnce
-    size: 50Gi
-    # -- Use an existing PVC instead of creating one
+    size: 10Gi
     existingClaim: ""
 
   # -- Extra environment variables
@@ -68,11 +115,14 @@ stalwart:
   # -- Container security context
   securityContext: {}
 
-  # -- Stalwart TOML config overrides (merged into generated config)
+  # -- Stalwart TOML config overrides (appended verbatim to the generated config)
   # Use this for settings not covered by values. See https://stalw.art/docs/
-  configOverrides: {}
-  #   spam-filter.header.antivirus:
-  #     enable: true
+  configOverrides: ""
+  # configOverrides: |
+  #   [spam-filter.header.antivirus]
+  #   enable = true
+  #   host = "clamav.mail.svc.cluster.local"
+  #   port = 3310
 
   # -- Listeners configuration
   listeners:
@@ -100,6 +150,7 @@ stalwart:
       port: http
     initialDelaySeconds: 10
     periodSeconds: 30
+    failureThreshold: 3
 
   # -- Readiness probe
   readinessProbe:
@@ -108,6 +159,7 @@ stalwart:
       port: http
     initialDelaySeconds: 5
     periodSeconds: 10
+    failureThreshold: 3
 
   # -- Log level: trace, debug, info, warn, error
   logLevel: info
@@ -132,6 +184,12 @@ serviceAccount:
   create: true
   name: ""
   annotations: {}
+
+# -- PodDisruptionBudget (useful with replicas > 1)
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
 
 # -- Ingress for web UI, JMAP, CalDAV, CardDAV, webmail
 ingress:
@@ -203,13 +261,25 @@ clamav:
   service:
     port: 3310
 
-# -- Backup via restic (optional)
+# -- Backup (optional)
 backup:
   enabled: false
   schedule: "0 3 * * *"
+  # -- Backup method:
+  #   "pgdump"        = pg_dump to a PVC (simple, self-contained)
+  #   "pgdump-restic" = pg_dump then push to restic repository (offsite)
+  method: pgdump-restic
+  pgdump:
+    # -- PVC for pgdump-only backups (method=pgdump)
+    persistence:
+      storageClass: ""
+      size: 20Gi
+    # -- Number of dump files to retain on the PVC
+    retainCount: 7
   restic:
     repository: ""  # e.g., s3:s3.example.com/mail-backups
-    # -- Name of existing secret with RESTIC_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+    # -- Name of existing Secret with RESTIC_PASSWORD (and AWS_ACCESS_KEY_ID,
+    # AWS_SECRET_ACCESS_KEY if using S3)
     existingSecret: ""
   retention:
     keepDaily: 7
@@ -217,11 +287,11 @@ backup:
     keepMonthly: 6
   resources:
     requests:
-      cpu: 100m
+      cpu: 200m
       memory: 256Mi
     limits:
       cpu: "1"
-      memory: 512Mi
+      memory: 1Gi
 
 # -- Prometheus ServiceMonitor (optional)
 metrics:
