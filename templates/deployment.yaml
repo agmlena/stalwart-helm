@@ -38,11 +38,17 @@ spec:
               until pg_isready \
                 -h {{ .Values.stalwart.storage.postgres.host | quote }} \
                 -p {{ .Values.stalwart.storage.postgres.port }} \
-                -U {{ .Values.stalwart.storage.postgres.user | quote }}; do
+                -U "$DB_USER"; do
                 echo "Waiting for PostgreSQL at {{ .Values.stalwart.storage.postgres.host }}:{{ .Values.stalwart.storage.postgres.port }}..."
                 sleep 2
               done
               echo "PostgreSQL is ready."
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.dbSecretName" . }}
+                  key: {{ .Values.stalwart.storage.postgres.secretUserKey }}
       {{- end }}
       containers:
         - name: stalwart
@@ -79,6 +85,16 @@ spec:
               protocol: TCP
           env:
             {{- if eq .Values.stalwart.storage.backend "postgres" }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.dbSecretName" . }}
+                  key: {{ .Values.stalwart.storage.postgres.secretUserKey }}
+            - name: DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.dbSecretName" . }}
+                  key: {{ .Values.stalwart.storage.postgres.secretDatabaseKey }}
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:

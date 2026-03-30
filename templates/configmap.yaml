@@ -50,8 +50,8 @@ data:
     type = "postgresql"
     host = {{ .Values.stalwart.storage.postgres.host | quote }}
     port = {{ .Values.stalwart.storage.postgres.port }}
-    database = {{ .Values.stalwart.storage.postgres.database | quote }}
-    user = {{ .Values.stalwart.storage.postgres.user | quote }}
+    database = "%{env:DB_DATABASE}%"
+    user = "%{env:DB_USER}%"
     password = "%{env:DB_PASSWORD}%"
     tls.enable = {{ .Values.stalwart.storage.postgres.tls.enabled }}
     tls.allow-invalid-certs = {{ .Values.stalwart.storage.postgres.tls.allowInvalidCerts }}

@@ -26,15 +26,25 @@ spec:
                 - |
                   set -e
                   DUMP_FILE="/staging/stalwart-$(date +%Y%m%d-%H%M%S).dump"
-                  echo "Dumping PostgreSQL database {{ .Values.stalwart.storage.postgres.database }}..."
+                  echo "Dumping PostgreSQL database $DB_DATABASE..."
                   PGPASSWORD="$DB_PASSWORD" pg_dump \
                     -h {{ .Values.stalwart.storage.postgres.host | quote }} \
                     -p {{ .Values.stalwart.storage.postgres.port }} \
-                    -U {{ .Values.stalwart.storage.postgres.user | quote }} \
-                    -d {{ .Values.stalwart.storage.postgres.database | quote }} \
+                    -U "$DB_USER" \
+                    -d "$DB_DATABASE" \
                     -Fc -f "$DUMP_FILE"
                   echo "Dump complete: $(du -h "$DUMP_FILE" | cut -f1)"
               env:
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretUserKey }}
+                - name: DB_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretDatabaseKey }}
                 - name: DB_PASSWORD
                   valueFrom:
                     secretKeyRef:
@@ -93,12 +103,12 @@ spec:
                 - |
                   set -e
                   DUMP_FILE="/backup/stalwart-$(date +%Y%m%d-%H%M%S).dump"
-                  echo "Dumping PostgreSQL database {{ .Values.stalwart.storage.postgres.database }}..."
+                  echo "Dumping PostgreSQL database $DB_DATABASE..."
                   PGPASSWORD="$DB_PASSWORD" pg_dump \
                     -h {{ .Values.stalwart.storage.postgres.host | quote }} \
                     -p {{ .Values.stalwart.storage.postgres.port }} \
-                    -U {{ .Values.stalwart.storage.postgres.user | quote }} \
-                    -d {{ .Values.stalwart.storage.postgres.database | quote }} \
+                    -U "$DB_USER" \
+                    -d "$DB_DATABASE" \
                     -Fc -f "$DUMP_FILE"
                   echo "Dump complete: $(du -h "$DUMP_FILE" | cut -f1)"
                   # Rotate: keep only the latest N dumps
@@ -106,6 +116,16 @@ spec:
                   echo "Retained dumps:"
                   ls -lh /backup/stalwart-*.dump
               env:
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretUserKey }}
+                - name: DB_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "stalwart.dbSecretName" . }}
+                      key: {{ .Values.stalwart.storage.postgres.secretDatabaseKey }}
                 - name: DB_PASSWORD
                   valueFrom:
                     secretKeyRef:

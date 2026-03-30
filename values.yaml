@@ -44,13 +44,18 @@ stalwart:
     postgres:
       host: ""
       port: 5432
+      # -- Database name (ignored if existingSecret is set and secretDatabaseKey is provided)
       database: stalwart
+      # -- Username (ignored if existingSecret is set and secretUserKey is provided)
       user: stalwart
       # -- Password (ignored if existingSecret is set)
       password: ""
-      # -- Use an existing Secret for the database password
+      # -- Use an existing Secret containing database credentials.
+      # Compatible with secrets created by CloudNativePG, Zalando Postgres Operator, etc.
       existingSecret: ""
-      # -- Key within the Secret that holds the password
+      # -- Keys within the Secret that hold the credentials
+      secretUserKey: user
+      secretDatabaseKey: dbname
       secretPasswordKey: password
       tls:
         enabled: false
