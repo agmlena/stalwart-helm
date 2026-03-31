@@ -1,12 +1,15 @@
-# -- Stalwart Mail Server Helm Chart Values
-
-# -- Mail server hostname (FQDN)
+# -- Mail server hostname (FQDN used in SMTP HELO, TLS certificates, and web UI)
 hostname: mail.example.com
 
 stalwart:
+  # -- Stalwart container image
   image:
+    # -- Image repository
     repository: stalwartlabs/stalwart
-    tag: ""  # defaults to appVersion
+    # -- Image tag
+    # @default -- `.Chart.AppVersion`
+    tag: ""
+    # -- Image pull policy
     pullPolicy: IfNotPresent
 
   # -- Number of replicas. >1 supported with PostgreSQL backend.
@@ -25,6 +28,7 @@ stalwart:
       maxUnavailable: 0
       maxSurge: 1
 
+  # -- Resource requests and limits for the Stalwart container
   resources:
     requests:
       cpu: 500m
@@ -38,51 +42,65 @@ stalwart:
   # ---------------------------------------------------------------------------
   storage:
     # -- Primary backend for data, fts, and lookup stores.
-    # Supported: postgres, rocksdb
+    # Supported: `postgres`, `rocksdb`
     backend: postgres
 
     # -- Blob storage backend. Where email message bodies and attachments are stored.
-    # "postgres" = same database as the primary backend (simplest)
-    # "s3"       = S3-compatible object storage (scalable; configure storage.s3 below)
+    # `postgres` = same database as the primary backend (simplest);
+    # `s3` = S3-compatible object storage (scalable; configure `storage.s3` below)
     blobBackend: postgres
 
-    # -- PostgreSQL connection (required when backend=postgres)
+    # -- PostgreSQL connection (required when `backend=postgres`)
     postgres:
+      # -- PostgreSQL hostname
       host: ""
+      # -- PostgreSQL port
       port: 5432
-      # -- Database name (ignored if existingSecret is set and secretDatabaseKey is provided)
+      # -- Database name (ignored if `existingSecret` is set)
       database: stalwart
-      # -- Username (ignored if existingSecret is set and secretUserKey is provided)
+      # -- Username (ignored if `existingSecret` is set)
       user: stalwart
-      # -- Password (ignored if existingSecret is set)
+      # -- Password (ignored if `existingSecret` is set)
       password: ""
       # -- Use an existing Secret containing database credentials.
       # Compatible with secrets created by CloudNativePG, Zalando Postgres Operator, etc.
       existingSecret: ""
-      # -- Keys within the Secret that hold the credentials
+      # -- Key in the Secret that holds the username
       secretUserKey: user
+      # -- Key in the Secret that holds the database name
       secretDatabaseKey: dbname
+      # -- Key in the Secret that holds the password
       secretPasswordKey: password
+      # -- TLS settings for the PostgreSQL connection
       tls:
+        # -- Enable TLS for the PostgreSQL connection
         enabled: false
+        # -- Allow invalid / self-signed certificates
         allowInvalidCerts: false
+      # -- Connection pool settings
       pool:
+        # -- Maximum number of connections in the pool
         maxConnections: 10
 
-    # -- S3 blob storage (required when blobBackend=s3)
+    # -- S3 blob storage (required when `blobBackend=s3`)
     s3:
+      # -- S3 bucket name
       bucket: ""
+      # -- S3 region
       region: us-east-1
       # -- Custom endpoint for S3-compatible stores (MinIO, Ceph, etc.)
       endpoint: ""
-      # -- Credentials (ignored if existingSecret is set)
+      # -- S3 access key (ignored if `existingSecret` is set)
       accessKey: ""
+      # -- S3 secret key (ignored if `existingSecret` is set)
       secretKey: ""
       # -- Use an existing Secret for S3 credentials
       existingSecret: ""
-      # -- Keys within the Secret
+      # -- Key in the Secret for the access key
       secretAccessKeyKey: access-key
+      # -- Key in the Secret for the secret key
       secretSecretKeyKey: secret-key
+      # -- S3 request timeout
       timeout: "30s"
 
     # -- Local data directory inside the container (used by RocksDB, or for temp/cache)
@@ -91,16 +109,21 @@ stalwart:
   # -- Local persistence. Not required with PostgreSQL backend (all state is in the DB).
   # Enable only if you need local disk for caching or if using RocksDB.
   persistence:
+    # -- Enable persistent volume for local data
     enabled: false
+    # -- Storage class for the PVC (empty = cluster default)
     storageClass: ""
+    # -- Access mode
     accessMode: ReadWriteOnce
+    # -- Volume size
     size: 10Gi
+    # -- Use an existing PVC instead of creating one
     existingClaim: ""
 
-  # -- Extra environment variables
+  # -- Extra environment variables injected into the Stalwart container
   env: []
 
-  # -- Extra volume mounts for the stalwart container
+  # -- Extra volume mounts for the Stalwart container
   extraVolumeMounts: []
 
   # -- Extra volumes for the pod
@@ -148,8 +171,11 @@ stalwart:
 
   # -- Init container (wait-for-postgres) image
   initContainerImage:
+    # -- Init container image repository
     repository: postgres
+    # -- Init container image tag
     tag: "17-alpine"
+    # -- Init container image pull policy
     pullPolicy: IfNotPresent
 
   # -- Init container security context (no NET_BIND_SERVICE needed)
@@ -165,21 +191,24 @@ stalwart:
   # ---------------------------------------------------------------------------
   # OIDC authentication (optional)
   # ---------------------------------------------------------------------------
-  # Stalwart validates OAUTHBEARER tokens by calling the provider's endpoint.
-  # Mail clients must obtain their own tokens from the OIDC provider first.
   oidc:
+    # -- Enable OIDC directory backend.
+    # Stalwart validates OAUTHBEARER tokens by calling the provider's endpoint.
+    # Mail clients must obtain their own tokens from the OIDC provider first.
     enabled: false
     # -- UserInfo or Token Introspection endpoint URL
     endpointUrl: ""
-    # -- "userinfo" or "introspect"
+    # -- Endpoint method: `userinfo` or `introspect`
     endpointMethod: userinfo
+    # -- HTTP timeout for the endpoint call
     timeout: "15s"
+    # -- Authentication for the endpoint call
     auth:
-      # -- How Stalwart authenticates to the endpoint: "none", "basic", or "token"
+      # -- How Stalwart authenticates to the endpoint: `none`, `basic`, or `token`
       method: none
-      # -- OIDC client_id (used as HTTP Basic username when method=basic)
+      # -- OIDC client_id (used as HTTP Basic username when `method=basic`)
       username: ""
-      # -- Client secret or bearer token (ignored if existingSecret is set)
+      # -- Client secret or bearer token (ignored if `existingSecret` is set)
       secret: ""
     # -- Use an existing Secret for the OIDC client secret
     existingSecret: ""
@@ -187,29 +216,41 @@ stalwart:
     secretKey: oidc-client-secret
     # -- OIDC claim-to-field mapping
     fields:
+      # -- Claim name for the email address
       email: email
+      # -- Claim name for the login username
       username: preferred_username
+      # -- Claim name for the display name
       fullName: name
 
-  # -- Stalwart TOML config overrides (appended verbatim to the generated config)
+  # -- Stalwart TOML config overrides (appended verbatim to the generated config).
+  # Use this for settings not covered by values. See https://stalw.art/docs/
   configOverrides: ""
 
-  # -- Listeners configuration
+  # -- Listener port configuration
   listeners:
+    # -- SMTP listener (port 25)
     smtp:
       port: 25
+    # -- SMTPS listener (port 465, implicit TLS)
     smtps:
       port: 465
+    # -- Submission listener (port 587)
     submission:
       port: 587
+    # -- IMAP listener (port 143)
     imap:
       port: 143
+    # -- IMAPS listener (port 993, implicit TLS)
     imaps:
       port: 993
+    # -- ManageSieve listener (port 4190)
     sieve:
       port: 4190
+    # -- HTTPS listener (port 443, web UI and API)
     https:
       port: 443
+    # -- HTTP listener (port 8080, health checks and metrics)
     http:
       port: 8080
 
@@ -240,66 +281,111 @@ stalwart:
     periodSeconds: 10
     failureThreshold: 3
 
-  # -- Log level: trace, debug, info, warn, error
+  # -- Log level: `trace`, `debug`, `info`, `warn`, `error`
   logLevel: info
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
 
 # -- Mail service (LoadBalancer for SMTP/IMAP ports)
 mailService:
+  # -- Service type
   type: LoadBalancer
+  # -- Service annotations (e.g. MetalLB address pool, AWS NLB type)
   annotations: {}
+  # -- Preserve source IP for SPF checks. Set to `Local` for production.
   externalTrafficPolicy: Local
+  # -- Static IP if supported by the cloud provider
   loadBalancerIP: ""
 
 # -- Web service (ClusterIP, fronted by Ingress)
 webService:
+  # -- Service type
   type: ClusterIP
+  # -- Service annotations
   annotations: {}
 
+# -- ServiceAccount configuration
 serviceAccount:
+  # -- Create a ServiceAccount
   create: true
+  # -- ServiceAccount name (defaults to the chart fullname)
+  # @default -- chart fullname
   name: ""
+  # -- ServiceAccount annotations
   annotations: {}
   # -- Disable automatic API token mount (pods don't need K8s API access)
   automountServiceAccountToken: false
 
-# -- PodDisruptionBudget (useful with replicas > 1)
+# -- PodDisruptionBudget (useful with `replicas > 1`)
 podDisruptionBudget:
+  # -- Enable PDB
   enabled: false
+  # -- Minimum number of available pods
   minAvailable: 1
 
-# -- Ingress for web UI, JMAP, CalDAV, CardDAV, webmail
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+
+# -- Ingress for web UI, JMAP, CalDAV, CardDAV, and webmail
 ingress:
+  # -- Enable Ingress
   enabled: false
+  # -- Ingress class name
   className: ""
+  # -- Ingress annotations (e.g. cert-manager issuer, proxy body size)
   annotations: {}
+  # -- Ingress hosts and paths
   hosts:
     - host: mail.example.com
       paths:
         - path: /
           pathType: Prefix
           service: stalwart
+  # -- TLS configuration
   tls: []
+
+# ---------------------------------------------------------------------------
+# TLS Certificate (cert-manager)
+# ---------------------------------------------------------------------------
 
 # -- TLS certificate via cert-manager
 certificate:
+  # -- Enable Certificate resource creation
   enabled: false
+  # -- cert-manager issuer reference
   issuerRef:
+    # -- Issuer name
     name: letsencrypt-prod
+    # -- Issuer kind (`ClusterIssuer` or `Issuer`)
     kind: ClusterIssuer
+  # -- DNS names for the certificate
   dnsNames: []
+  # -- Name of the TLS Secret to create
   secretName: mail-tls
 
 # ---------------------------------------------------------------------------
 # SnappyMail webmail (optional)
 # ---------------------------------------------------------------------------
+
 webmail:
+  # -- Enable SnappyMail webmail deployment
   enabled: false
+  # -- SnappyMail container image
   image:
+    # -- Image repository
     repository: djmaze/snappymail
+    # -- Image tag
     tag: "2.38.2"
+    # -- Image pull policy
     pullPolicy: IfNotPresent
+  # -- Number of replicas
   replicas: 1
+  # -- Deployment revision history to retain
   revisionHistoryLimit: 3
+  # -- Resource requests and limits
   resources:
     requests:
       cpu: 100m
@@ -307,10 +393,15 @@ webmail:
     limits:
       cpu: 500m
       memory: 256Mi
+  # -- Webmail ClusterIP service
   service:
+    # -- Service port
     port: 8888
+  # -- Path prefix in Ingress
   ingressPath: /webmail
+  # -- Pod annotations
   podAnnotations: {}
+  # -- Pod-level security context
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 82
@@ -318,28 +409,43 @@ webmail:
     fsGroup: 82
     seccompProfile:
       type: RuntimeDefault
+  # -- Container security context
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
       drop: [ALL]
+  # -- Image pull secrets
   imagePullSecrets: []
+  # -- Node selector
   nodeSelector: {}
+  # -- Tolerations
   tolerations: []
+  # -- Affinity rules
   affinity: {}
+  # -- Topology spread constraints
   topologySpreadConstraints: []
 
 # ---------------------------------------------------------------------------
 # ClamAV antivirus (optional)
 # ---------------------------------------------------------------------------
+
 clamav:
+  # -- Enable ClamAV antivirus deployment
   enabled: false
+  # -- ClamAV container image
   image:
+    # -- Image repository
     repository: clamav/clamav
+    # -- Image tag
     tag: "1.4"
+    # -- Image pull policy
     pullPolicy: IfNotPresent
+  # -- Number of replicas
   replicas: 1
+  # -- Deployment revision history to retain
   revisionHistoryLimit: 3
+  # -- Resource requests and limits
   resources:
     requests:
       cpu: 200m
@@ -347,13 +453,21 @@ clamav:
     limits:
       cpu: "1"
       memory: 2Gi
+  # -- ClamAV virus database persistence
   persistence:
+    # -- Enable persistent volume for virus DB
     enabled: true
+    # -- Storage class (empty = cluster default)
     storageClass: ""
+    # -- Volume size
     size: 5Gi
+  # -- ClamAV ClusterIP service
   service:
+    # -- clamd TCP port
     port: 3310
+  # -- Pod annotations
   podAnnotations: {}
+  # -- Pod-level security context
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 100
@@ -361,66 +475,101 @@ clamav:
     fsGroup: 101
     seccompProfile:
       type: RuntimeDefault
+  # -- Container security context
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
       drop: [ALL]
-  # -- ClamAV takes several minutes to load virus DB on startup
+  # -- Startup probe. ClamAV takes several minutes to load the virus DB on startup.
   startupProbe:
     tcpSocket:
       port: clamd
     initialDelaySeconds: 10
     periodSeconds: 10
     failureThreshold: 60
+  # -- Liveness probe
   livenessProbe:
     tcpSocket:
       port: clamd
     periodSeconds: 30
     failureThreshold: 3
+  # -- Readiness probe
   readinessProbe:
     tcpSocket:
       port: clamd
     periodSeconds: 10
     failureThreshold: 3
+  # -- Image pull secrets
   imagePullSecrets: []
+  # -- Node selector
   nodeSelector: {}
+  # -- Tolerations
   tolerations: []
+  # -- Affinity rules
   affinity: {}
 
 # ---------------------------------------------------------------------------
 # Backup (optional)
 # ---------------------------------------------------------------------------
+
 backup:
+  # -- Enable backup CronJob
   enabled: false
+  # -- Cron schedule (default: daily at 03:00)
   schedule: "0 3 * * *"
   # -- Backup method:
-  #   "pgdump"        = pg_dump to a PVC (simple, self-contained)
-  #   "pgdump-restic" = pg_dump then push to restic repository (offsite)
+  # `pgdump` = pg_dump to a PVC (simple, self-contained);
+  # `pgdump-restic` = pg_dump then push to restic repository (offsite)
   method: pgdump-restic
+  # -- Number of successful job runs to retain
   successfulJobsHistoryLimit: 3
+  # -- Number of failed job runs to retain
   failedJobsHistoryLimit: 3
+  # -- Seconds after the scheduled time that the job can still start
   startingDeadlineSeconds: 3600
+  # -- pg_dump settings
   pgdump:
+    # -- pg_dump container image
     image:
+      # -- Image repository
       repository: postgres
+      # -- Image tag
       tag: "17-alpine"
+      # -- Image pull policy
       pullPolicy: IfNotPresent
+    # -- PVC for pgdump-only backups (`method=pgdump`)
     persistence:
+      # -- Storage class (empty = cluster default)
       storageClass: ""
+      # -- Volume size
       size: 20Gi
+    # -- Number of dump files to retain on the PVC
     retainCount: 7
+  # -- Restic settings (used by `pgdump-restic` and RocksDB backup methods)
   restic:
+    # -- Restic container image
     image:
+      # -- Image repository
       repository: restic/restic
+      # -- Image tag
       tag: "0.17.3"
+      # -- Image pull policy
       pullPolicy: IfNotPresent
+    # -- Restic repository URL (e.g. `s3:s3.example.com/mail-backups`)
     repository: ""
+    # -- Existing Secret with `RESTIC_PASSWORD` (and S3/B2/etc. credentials).
+    # Required when using a restic backup method.
     existingSecret: ""
+  # -- Retention policy for restic snapshots
   retention:
+    # -- Keep N daily snapshots
     keepDaily: 7
+    # -- Keep N weekly snapshots
     keepWeekly: 4
+    # -- Keep N monthly snapshots
     keepMonthly: 6
+  # -- Resource requests and limits for backup containers
   resources:
     requests:
       cpu: 200m
@@ -428,10 +577,12 @@ backup:
     limits:
       cpu: "1"
       memory: 1Gi
+  # -- Pod-level security context for backup jobs
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
+  # -- Container security context for pg_dump containers
   pgdumpSecurityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
@@ -440,6 +591,7 @@ backup:
     runAsGroup: 999
     capabilities:
       drop: [ALL]
+  # -- Container security context for restic containers
   resticSecurityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
@@ -448,26 +600,46 @@ backup:
     runAsGroup: 1000
     capabilities:
       drop: [ALL]
+  # -- Image pull secrets for backup containers
   imagePullSecrets: []
 
 # ---------------------------------------------------------------------------
 # Network Policy (optional)
 # ---------------------------------------------------------------------------
+
 networkPolicy:
+  # -- Enable NetworkPolicy resources for pod-to-pod traffic isolation
   enabled: false
+  # -- Stalwart NetworkPolicy overrides
   stalwart:
+    # -- Additional ingress rules
     extraIngress: []
+    # -- Additional egress rules
     extraEgress: []
+  # -- Webmail NetworkPolicy overrides
   webmail:
+    # -- Additional ingress rules
     extraIngress: []
+    # -- Additional egress rules
     extraEgress: []
+  # -- ClamAV NetworkPolicy overrides
   clamav:
+    # -- Additional ingress rules
     extraIngress: []
+    # -- Additional egress rules
     extraEgress: []
 
-# -- Prometheus ServiceMonitor (optional)
+# ---------------------------------------------------------------------------
+# Monitoring
+# ---------------------------------------------------------------------------
+
+# -- Prometheus ServiceMonitor
 metrics:
+  # -- Enable ServiceMonitor resource
   enabled: false
+  # -- Scrape interval
   interval: 30s
+  # -- Metrics endpoint path
   path: /metrics
+  # -- Port to scrape
   port: http

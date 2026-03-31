@@ -1,0 +1,80 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.homepageLine" . }}
+
+## TL;DR
+
+```console
+helm install my-mail ./stalwart-mail \
+  --set hostname=mail.example.com \
+  --set stalwart.storage.postgres.host=postgres.example.com \
+  --set stalwart.storage.postgres.existingSecret=my-db-secret
+```
+
+## Introduction
+
+This chart deploys [Stalwart Mail Server](https://stalw.art) on Kubernetes. Stalwart is a single Rust binary that implements SMTP, IMAP, JMAP, CalDAV, CardDAV, and ManageSieve. The chart supports:
+
+- **PostgreSQL** (recommended) or **RocksDB** storage backends
+- **S3-compatible** blob storage for email bodies and attachments
+- **OIDC** authentication via any OpenID Connect provider
+- **SnappyMail** webmail frontend
+- **ClamAV** antivirus integration
+- **Automated backups** via pg_dump and/or restic
+- **NetworkPolicy** for pod-to-pod traffic isolation
+- **Pod Security Standards** "restricted" profile out of the box
+
+## Prerequisites
+
+- Kubernetes >= 1.21
+- Helm >= 3.8
+- A PostgreSQL database (CloudNativePG, Zalando Postgres Operator, managed, or external)
+- A LoadBalancer-capable network (MetalLB, cloud LB) for SMTP/IMAP ports
+- [cert-manager](https://cert-manager.io/) (if `certificate.enabled=true`)
+
+## Installing the Chart
+
+```console
+helm install my-mail ./stalwart-mail \
+  --namespace mail --create-namespace \
+  --set hostname=mail.example.com \
+  --set stalwart.storage.postgres.host=postgres.svc.cluster.local \
+  --set stalwart.storage.postgres.existingSecret=my-db-secret
+```
+
+## Uninstalling the Chart
+
+```console
+helm uninstall my-mail -n mail
+```
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.maintainersSection" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+## Parameters
+
+{{ template "chart.valuesSection" . }}
+
+## DNS and MX Setup
+
+After installation, configure DNS records:
+
+```
+example.com.    IN  MX  10  mail.example.com.
+mail.example.com.  IN  A  <EXTERNAL-IP>
+example.com.    IN  TXT "v=spf1 a:mail.example.com -all"
+_dmarc.example.com.  IN  TXT "v=DMARC1; p=reject; rua=mailto:dmarc@example.com"
+```
+
+## Links
+
+- [Stalwart Mail Server](https://stalw.art)
+- [Stalwart Documentation](https://stalw.art/docs/)
+- [Stalwart GitHub](https://github.com/stalwartlabs/stalwart)
