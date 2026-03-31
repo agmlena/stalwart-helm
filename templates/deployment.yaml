@@ -6,6 +6,7 @@ metadata:
     {{- include "stalwart.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.stalwart.replicas }}
+  revisionHistoryLimit: {{ .Values.stalwart.revisionHistoryLimit }}
   {{- with .Values.stalwart.strategy }}
   strategy:
     {{- toYaml . | nindent 4 }}
@@ -17,6 +18,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- with .Values.stalwart.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -24,14 +26,25 @@ spec:
         {{- include "stalwart.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "stalwart.serviceAccountName" . }}
-      {{- with .Values.stalwart.podSecurityContext }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.stalwart.terminationGracePeriodSeconds }}
       securityContext:
+        {{- toYaml .Values.stalwart.podSecurityContext | nindent 8 }}
+      {{- with .Values.stalwart.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.stalwart.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if eq .Values.stalwart.storage.backend "postgres" }}
       initContainers:
         - name: wait-for-postgres
-          image: postgres:17-alpine
+          image: {{ include "stalwart.initImage" . }}
+          imagePullPolicy: {{ .Values.stalwart.initContainerImage.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.stalwart.initContainerSecurityContext | nindent 12 }}
           command: ['sh', '-c']
           args:
             - |
@@ -49,15 +62,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "stalwart.dbSecretName" . }}
                   key: {{ .Values.stalwart.storage.postgres.secretUserKey }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       {{- end }}
       containers:
         - name: stalwart
           image: {{ include "stalwart.image" . }}
           imagePullPolicy: {{ .Values.stalwart.image.pullPolicy }}
-          {{- with .Values.stalwart.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- toYaml .Values.stalwart.securityContext | nindent 12 }}
           ports:
             - name: smtp
               containerPort: {{ .Values.stalwart.listeners.smtp.port }}
@@ -101,6 +115,13 @@ spec:
                   name: {{ include "stalwart.dbSecretName" . }}
                   key: {{ .Values.stalwart.storage.postgres.secretPasswordKey }}
             {{- end }}
+            {{- if and .Values.stalwart.oidc.enabled (ne .Values.stalwart.oidc.auth.method "none") }}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stalwart.oidcSecretName" . }}
+                  key: {{ .Values.stalwart.oidc.secretKey }}
+            {{- end }}
             {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
             - name: S3_ACCESS_KEY
               valueFrom:
@@ -122,9 +143,16 @@ spec:
             - name: config
               mountPath: /opt/stalwart-mail/etc/config.toml
               subPath: config.toml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
             {{- with .Values.stalwart.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.stalwart.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.stalwart.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
@@ -148,6 +176,8 @@ spec:
         - name: config
           configMap:
             name: {{ include "stalwart.fullname" . }}
+        - name: tmp
+          emptyDir: {}
         {{- with .Values.stalwart.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -1,0 +1,174 @@
+{{- if .Values.networkPolicy.enabled }}
+# -- Stalwart mail server: allow inbound mail/web traffic, restrict egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "stalwart.fullname" . }}
+  labels:
+    {{- include "stalwart.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "stalwart.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow inbound on all listener ports
+    - ports:
+        - port: {{ .Values.stalwart.listeners.smtp.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.smtps.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.submission.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.imap.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.imaps.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.sieve.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.https.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.http.port }}
+          protocol: TCP
+    {{- with .Values.networkPolicy.stalwart.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- if eq .Values.stalwart.storage.backend "postgres" }}
+    # PostgreSQL
+    - ports:
+        - port: {{ .Values.stalwart.storage.postgres.port }}
+          protocol: TCP
+    {{- end }}
+    {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
+    # S3 (HTTPS)
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.clamav.enabled }}
+    # ClamAV
+    - ports:
+        - port: {{ .Values.clamav.service.port }}
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              {{- include "stalwart.clamav.selectorLabels" . | nindent 14 }}
+    {{- end }}
+    # Outbound SMTP (relay to other mail servers)
+    - ports:
+        - port: 25
+          protocol: TCP
+        - port: 465
+          protocol: TCP
+        - port: 587
+          protocol: TCP
+    # HTTP/HTTPS for OCSP, CRL, ACME, etc.
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+    {{- with .Values.networkPolicy.stalwart.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- if .Values.clamav.enabled }}
+---
+# -- ClamAV: accept connections only from Stalwart, allow freshclam updates
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "stalwart.fullname" . }}-clamav
+  labels:
+    {{- include "stalwart.clamav.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "stalwart.clamav.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "stalwart.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: {{ .Values.clamav.service.port }}
+          protocol: TCP
+    {{- with .Values.networkPolicy.clamav.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTP/HTTPS for freshclam signature updates
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+    {{- with .Values.networkPolicy.clamav.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.webmail.enabled }}
+---
+# -- Webmail (SnappyMail): accept ingress traffic, egress only to Stalwart and DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "stalwart.fullname" . }}-webmail
+  labels:
+    {{- include "stalwart.webmail.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "stalwart.webmail.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: {{ .Values.webmail.service.port }}
+          protocol: TCP
+    {{- with .Values.networkPolicy.webmail.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Stalwart IMAP + HTTP (for JMAP/API access)
+    - ports:
+        - port: {{ .Values.stalwart.listeners.imap.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.imaps.port }}
+          protocol: TCP
+        - port: {{ .Values.stalwart.listeners.http.port }}
+          protocol: TCP
+      to:
+        - podSelector:
+            matchLabels:
+              {{- include "stalwart.selectorLabels" . | nindent 14 }}
+    {{- with .Values.networkPolicy.webmail.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}

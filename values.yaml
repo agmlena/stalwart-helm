@@ -12,6 +12,12 @@ stalwart:
   # -- Number of replicas. >1 supported with PostgreSQL backend.
   replicas: 1
 
+  # -- Deployment revision history to retain
+  revisionHistoryLimit: 3
+
+  # -- Seconds to wait for SMTP transactions to complete before termination
+  terminationGracePeriodSeconds: 60
+
   # -- Deployment strategy. RollingUpdate is safe with PostgreSQL (no local state).
   strategy:
     type: RollingUpdate
@@ -93,14 +99,15 @@ stalwart:
 
   # -- Extra environment variables
   env: []
-  #   - name: FOO
-  #     value: bar
 
   # -- Extra volume mounts for the stalwart container
   extraVolumeMounts: []
 
   # -- Extra volumes for the pod
   extraVolumes: []
+
+  # -- Image pull secrets
+  imagePullSecrets: []
 
   # -- Node selector
   nodeSelector: {}
@@ -111,23 +118,81 @@ stalwart:
   # -- Affinity rules
   affinity: {}
 
+  # -- Topology spread constraints (for multi-replica scheduling)
+  topologySpreadConstraints: []
+
   # -- Pod annotations
   podAnnotations: {}
 
-  # -- Pod security context
-  podSecurityContext: {}
+  # ---------------------------------------------------------------------------
+  # Security (Pod Security Standards "restricted" profile by default)
+  # ---------------------------------------------------------------------------
 
-  # -- Container security context
-  securityContext: {}
+  # -- Pod-level security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  # -- Stalwart container security context.
+  # NET_BIND_SERVICE is required for privileged ports (25, 143, 443, 465, 587, 993).
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+      add: [NET_BIND_SERVICE]
+
+  # -- Init container (wait-for-postgres) image
+  initContainerImage:
+    repository: postgres
+    tag: "17-alpine"
+    pullPolicy: IfNotPresent
+
+  # -- Init container security context (no NET_BIND_SERVICE needed)
+  initContainerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    capabilities:
+      drop: [ALL]
+
+  # ---------------------------------------------------------------------------
+  # OIDC authentication (optional)
+  # ---------------------------------------------------------------------------
+  # Stalwart validates OAUTHBEARER tokens by calling the provider's endpoint.
+  # Mail clients must obtain their own tokens from the OIDC provider first.
+  oidc:
+    enabled: false
+    # -- UserInfo or Token Introspection endpoint URL
+    endpointUrl: ""
+    # -- "userinfo" or "introspect"
+    endpointMethod: userinfo
+    timeout: "15s"
+    auth:
+      # -- How Stalwart authenticates to the endpoint: "none", "basic", or "token"
+      method: none
+      # -- OIDC client_id (used as HTTP Basic username when method=basic)
+      username: ""
+      # -- Client secret or bearer token (ignored if existingSecret is set)
+      secret: ""
+    # -- Use an existing Secret for the OIDC client secret
+    existingSecret: ""
+    # -- Key within the Secret that holds the client secret
+    secretKey: oidc-client-secret
+    # -- OIDC claim-to-field mapping
+    fields:
+      email: email
+      username: preferred_username
+      fullName: name
 
   # -- Stalwart TOML config overrides (appended verbatim to the generated config)
-  # Use this for settings not covered by values. See https://stalw.art/docs/
   configOverrides: ""
-  # configOverrides: |
-  #   [spam-filter.header.antivirus]
-  #   enable = true
-  #   host = "clamav.mail.svc.cluster.local"
-  #   port = 3310
 
   # -- Listeners configuration
   listeners:
@@ -147,6 +212,15 @@ stalwart:
       port: 443
     http:
       port: 8080
+
+  # -- Startup probe (allows slow first-boot initialization)
+  startupProbe:
+    httpGet:
+      path: /healthz/live
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 24
 
   # -- Liveness probe
   livenessProbe:
@@ -173,11 +247,7 @@ stalwart:
 mailService:
   type: LoadBalancer
   annotations: {}
-  #   metallb.universe.tf/address-pool: mail-pool
-  #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
-  # -- Preserve source IP for SPF checks. Set to Local for production.
   externalTrafficPolicy: Local
-  # -- Static IP if supported by provider
   loadBalancerIP: ""
 
 # -- Web service (ClusterIP, fronted by Ingress)
@@ -189,20 +259,19 @@ serviceAccount:
   create: true
   name: ""
   annotations: {}
+  # -- Disable automatic API token mount (pods don't need K8s API access)
+  automountServiceAccountToken: false
 
 # -- PodDisruptionBudget (useful with replicas > 1)
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
-  # maxUnavailable: 1
 
 # -- Ingress for web UI, JMAP, CalDAV, CardDAV, webmail
 ingress:
   enabled: false
   className: ""
   annotations: {}
-  #   cert-manager.io/cluster-issuer: letsencrypt-prod
-  #   nginx.ingress.kubernetes.io/proxy-body-size: 50m
   hosts:
     - host: mail.example.com
       paths:
@@ -210,9 +279,6 @@ ingress:
           pathType: Prefix
           service: stalwart
   tls: []
-  #   - secretName: mail-tls
-  #     hosts:
-  #       - mail.example.com
 
 # -- TLS certificate via cert-manager
 certificate:
@@ -221,17 +287,19 @@ certificate:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames: []
-  #   - mail.example.com
   secretName: mail-tls
 
-# -- SnappyMail webmail (optional)
+# ---------------------------------------------------------------------------
+# SnappyMail webmail (optional)
+# ---------------------------------------------------------------------------
 webmail:
   enabled: false
   image:
     repository: djmaze/snappymail
-    tag: latest
+    tag: "2.38.2"
     pullPolicy: IfNotPresent
   replicas: 1
+  revisionHistoryLimit: 3
   resources:
     requests:
       cpu: 100m
@@ -241,17 +309,37 @@ webmail:
       memory: 256Mi
   service:
     port: 8888
-  # -- Path prefix in ingress
   ingressPath: /webmail
+  podAnnotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 82
+    runAsGroup: 82
+    fsGroup: 82
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
 
-# -- ClamAV antivirus (optional)
+# ---------------------------------------------------------------------------
+# ClamAV antivirus (optional)
+# ---------------------------------------------------------------------------
 clamav:
   enabled: false
   image:
     repository: clamav/clamav
-    tag: stable
+    tag: "1.4"
     pullPolicy: IfNotPresent
   replicas: 1
+  revisionHistoryLimit: 3
   resources:
     requests:
       cpu: 200m
@@ -265,8 +353,44 @@ clamav:
     size: 5Gi
   service:
     port: 3310
+  podAnnotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  # -- ClamAV takes several minutes to load virus DB on startup
+  startupProbe:
+    tcpSocket:
+      port: clamd
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 60
+  livenessProbe:
+    tcpSocket:
+      port: clamd
+    periodSeconds: 30
+    failureThreshold: 3
+  readinessProbe:
+    tcpSocket:
+      port: clamd
+    periodSeconds: 10
+    failureThreshold: 3
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
-# -- Backup (optional)
+# ---------------------------------------------------------------------------
+# Backup (optional)
+# ---------------------------------------------------------------------------
 backup:
   enabled: false
   schedule: "0 3 * * *"
@@ -274,17 +398,24 @@ backup:
   #   "pgdump"        = pg_dump to a PVC (simple, self-contained)
   #   "pgdump-restic" = pg_dump then push to restic repository (offsite)
   method: pgdump-restic
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
   pgdump:
-    # -- PVC for pgdump-only backups (method=pgdump)
+    image:
+      repository: postgres
+      tag: "17-alpine"
+      pullPolicy: IfNotPresent
     persistence:
       storageClass: ""
       size: 20Gi
-    # -- Number of dump files to retain on the PVC
     retainCount: 7
   restic:
-    repository: ""  # e.g., s3:s3.example.com/mail-backups
-    # -- Name of existing Secret with RESTIC_PASSWORD (and AWS_ACCESS_KEY_ID,
-    # AWS_SECRET_ACCESS_KEY if using S3)
+    image:
+      repository: restic/restic
+      tag: "0.17.3"
+      pullPolicy: IfNotPresent
+    repository: ""
     existingSecret: ""
   retention:
     keepDaily: 7
@@ -297,6 +428,42 @@ backup:
     limits:
       cpu: "1"
       memory: 1Gi
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  pgdumpSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    capabilities:
+      drop: [ALL]
+  resticSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    capabilities:
+      drop: [ALL]
+  imagePullSecrets: []
+
+# ---------------------------------------------------------------------------
+# Network Policy (optional)
+# ---------------------------------------------------------------------------
+networkPolicy:
+  enabled: false
+  stalwart:
+    extraIngress: []
+    extraEgress: []
+  webmail:
+    extraIngress: []
+    extraEgress: []
+  clamav:
+    extraIngress: []
+    extraEgress: []
 
 # -- Prometheus ServiceMonitor (optional)
 metrics:

@@ -111,3 +111,35 @@ app.kubernetes.io/component: clamav
 {{ include "stalwart.selectorLabels" . }}
 app.kubernetes.io/component: clamav
 {{- end }}
+
+{{/*
+OIDC secret name — returns existingSecret if set, otherwise the chart-generated secret name.
+*/}}
+{{- define "stalwart.oidcSecretName" -}}
+{{- if .Values.stalwart.oidc.existingSecret }}
+{{- .Values.stalwart.oidc.existingSecret }}
+{{- else }}
+{{- printf "%s-oidc" (include "stalwart.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Init container image
+*/}}
+{{- define "stalwart.initImage" -}}
+{{- printf "%s:%s" .Values.stalwart.initContainerImage.repository .Values.stalwart.initContainerImage.tag }}
+{{- end }}
+
+{{/*
+Backup pg_dump image
+*/}}
+{{- define "stalwart.backup.pgdumpImage" -}}
+{{- printf "%s:%s" .Values.backup.pgdump.image.repository .Values.backup.pgdump.image.tag }}
+{{- end }}
+
+{{/*
+Backup restic image
+*/}}
+{{- define "stalwart.backup.resticImage" -}}
+{{- printf "%s:%s" .Values.backup.restic.image.repository .Values.backup.restic.image.tag }}
+{{- end }}

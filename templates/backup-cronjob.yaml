@@ -8,6 +8,9 @@ metadata:
 spec:
   schedule: {{ .Values.backup.schedule | quote }}
   concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  startingDeadlineSeconds: {{ .Values.backup.startingDeadlineSeconds }}
   jobTemplate:
     spec:
       template:
@@ -16,11 +19,19 @@ spec:
             {{- include "stalwart.selectorLabels" . | nindent 12 }}
             app.kubernetes.io/component: backup
         spec:
+          automountServiceAccountToken: false
+          securityContext:
+            {{- toYaml .Values.backup.podSecurityContext | nindent 12 }}
+          {{- with .Values.backup.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump-restic") }}
           # Two-stage backup: pg_dump (init) → restic push (main)
           initContainers:
             - name: pg-dump
-              image: postgres:17-alpine
+              image: {{ include "stalwart.backup.pgdumpImage" . }}
+              imagePullPolicy: {{ .Values.backup.pgdump.image.pullPolicy }}
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -34,6 +45,8 @@ spec:
                     -d "$DB_DATABASE" \
                     -Fc -f "$DUMP_FILE"
                   echo "Dump complete: $(du -h "$DUMP_FILE" | cut -f1)"
+              securityContext:
+                {{- toYaml .Values.backup.pgdumpSecurityContext | nindent 16 }}
               env:
                 - name: DB_USER
                   valueFrom:
@@ -53,13 +66,16 @@ spec:
               volumeMounts:
                 - name: staging
                   mountPath: /staging
+                - name: tmp
+                  mountPath: /tmp
               {{- with .Values.backup.resources }}
               resources:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
           containers:
             - name: restic-push
-              image: restic/restic:latest
+              image: {{ include "stalwart.backup.resticImage" . }}
+              imagePullPolicy: {{ .Values.backup.restic.image.pullPolicy }}
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -77,13 +93,20 @@ spec:
                     --keep-monthly {{ .Values.backup.retention.keepMonthly }} \
                     --prune
                   echo "Backup complete."
+              securityContext:
+                {{- toYaml .Values.backup.resticSecurityContext | nindent 16 }}
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
               envFrom:
                 - secretRef:
-                    name: {{ .Values.backup.restic.existingSecret }}
+                    name: {{ required "backup.restic.existingSecret is required when using a restic backup method" .Values.backup.restic.existingSecret }}
               volumeMounts:
                 - name: staging
                   mountPath: /staging
                   readOnly: true
+                - name: tmp
+                  mountPath: /tmp
               {{- with .Values.backup.resources }}
               resources:
                 {{- toYaml . | nindent 16 }}
@@ -92,12 +115,15 @@ spec:
             - name: staging
               emptyDir:
                 sizeLimit: {{ .Values.backup.pgdump.persistence.size }}
+            - name: tmp
+              emptyDir: {}
 
           {{- else if and (eq .Values.stalwart.storage.backend "postgres") (eq .Values.backup.method "pgdump") }}
           # Simple pg_dump to PVC with file rotation
           containers:
             - name: pg-dump
-              image: postgres:17-alpine
+              image: {{ include "stalwart.backup.pgdumpImage" . }}
+              imagePullPolicy: {{ .Values.backup.pgdump.image.pullPolicy }}
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -115,6 +141,8 @@ spec:
                   ls -t /backup/stalwart-*.dump 2>/dev/null | tail -n +{{ add1 .Values.backup.pgdump.retainCount }} | xargs -r rm -v
                   echo "Retained dumps:"
                   ls -lh /backup/stalwart-*.dump
+              securityContext:
+                {{- toYaml .Values.backup.pgdumpSecurityContext | nindent 16 }}
               env:
                 - name: DB_USER
                   valueFrom:
@@ -134,6 +162,8 @@ spec:
               volumeMounts:
                 - name: backup
                   mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
               {{- with .Values.backup.resources }}
               resources:
                 {{- toYaml . | nindent 16 }}
@@ -142,12 +172,15 @@ spec:
             - name: backup
               persistentVolumeClaim:
                 claimName: {{ include "stalwart.fullname" . }}-backup
+            - name: tmp
+              emptyDir: {}
 
           {{- else }}
           # RocksDB: restic backup of the data PVC
           containers:
             - name: restic
-              image: restic/restic:latest
+              image: {{ include "stalwart.backup.resticImage" . }}
+              imagePullPolicy: {{ .Values.backup.restic.image.pullPolicy }}
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -162,13 +195,20 @@ spec:
                     --keep-weekly {{ .Values.backup.retention.keepWeekly }} \
                     --keep-monthly {{ .Values.backup.retention.keepMonthly }} \
                     --prune
+              securityContext:
+                {{- toYaml .Values.backup.resticSecurityContext | nindent 16 }}
+              env:
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
               envFrom:
                 - secretRef:
-                    name: {{ .Values.backup.restic.existingSecret }}
+                    name: {{ required "backup.restic.existingSecret is required when using a restic backup method" .Values.backup.restic.existingSecret }}
               volumeMounts:
                 - name: data
                   mountPath: /data
                   readOnly: true
+                - name: tmp
+                  mountPath: /tmp
               {{- with .Values.backup.resources }}
               resources:
                 {{- toYaml . | nindent 16 }}
@@ -177,6 +217,8 @@ spec:
             - name: data
               persistentVolumeClaim:
                 claimName: {{ .Values.stalwart.persistence.existingClaim | default (printf "%s-data" (include "stalwart.fullname" .)) }}
+            - name: tmp
+              emptyDir: {}
           {{- end }}
           restartPolicy: OnFailure
 {{- end }}

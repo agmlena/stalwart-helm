@@ -61,7 +61,11 @@ data:
     data = "db"
     fts = "db"
     lookup = "db"
+    {{- if .Values.stalwart.oidc.enabled }}
+    directory = "oidc"
+    {{- else }}
     directory = "internal"
+    {{- end }}
     {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
     blob = "blob-s3"
     {{- else }}
@@ -71,6 +75,27 @@ data:
     [directory.internal]
     type = "internal"
     store = "db"
+
+    {{- if .Values.stalwart.oidc.enabled }}
+    # ---- OIDC directory ----
+    [directory."oidc"]
+    type = "oidc"
+    timeout = {{ .Values.stalwart.oidc.timeout | quote }}
+    endpoint.url = {{ .Values.stalwart.oidc.endpointUrl | quote }}
+    endpoint.method = {{ .Values.stalwart.oidc.endpointMethod | quote }}
+    {{- if ne .Values.stalwart.oidc.auth.method "none" }}
+    auth.method = {{ .Values.stalwart.oidc.auth.method | quote }}
+    {{- if eq .Values.stalwart.oidc.auth.method "basic" }}
+    auth.username = {{ .Values.stalwart.oidc.auth.username | quote }}
+    auth.secret = "%{env:OIDC_CLIENT_SECRET}%"
+    {{- else if eq .Values.stalwart.oidc.auth.method "token" }}
+    auth.token = "%{env:OIDC_CLIENT_SECRET}%"
+    {{- end }}
+    {{- end }}
+    fields.email = {{ .Values.stalwart.oidc.fields.email | quote }}
+    fields.username = {{ .Values.stalwart.oidc.fields.username | quote }}
+    fields.full-name = {{ .Values.stalwart.oidc.fields.fullName | quote }}
+    {{- end }}
 
     {{- if eq .Values.stalwart.storage.blobBackend "s3" }}
     # ---- S3 blob store ----
@@ -97,11 +122,36 @@ data:
     blob = "rocksdb"
     fts = "rocksdb"
     lookup = "rocksdb"
+    {{- if .Values.stalwart.oidc.enabled }}
+    directory = "oidc"
+    {{- else }}
     directory = "internal"
+    {{- end }}
 
     [directory.internal]
     type = "internal"
     store = "rocksdb"
+
+    {{- if .Values.stalwart.oidc.enabled }}
+    # ---- OIDC directory ----
+    [directory."oidc"]
+    type = "oidc"
+    timeout = {{ .Values.stalwart.oidc.timeout | quote }}
+    endpoint.url = {{ .Values.stalwart.oidc.endpointUrl | quote }}
+    endpoint.method = {{ .Values.stalwart.oidc.endpointMethod | quote }}
+    {{- if ne .Values.stalwart.oidc.auth.method "none" }}
+    auth.method = {{ .Values.stalwart.oidc.auth.method | quote }}
+    {{- if eq .Values.stalwart.oidc.auth.method "basic" }}
+    auth.username = {{ .Values.stalwart.oidc.auth.username | quote }}
+    auth.secret = "%{env:OIDC_CLIENT_SECRET}%"
+    {{- else if eq .Values.stalwart.oidc.auth.method "token" }}
+    auth.token = "%{env:OIDC_CLIENT_SECRET}%"
+    {{- end }}
+    {{- end }}
+    fields.email = {{ .Values.stalwart.oidc.fields.email | quote }}
+    fields.username = {{ .Values.stalwart.oidc.fields.username | quote }}
+    fields.full-name = {{ .Values.stalwart.oidc.fields.fullName | quote }}
+    {{- end }}
     {{- end }}
 
     [tracer.stdout]

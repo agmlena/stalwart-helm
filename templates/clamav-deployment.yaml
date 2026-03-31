@@ -7,18 +7,32 @@ metadata:
     {{- include "stalwart.clamav.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.clamav.replicas }}
+  revisionHistoryLimit: {{ .Values.clamav.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "stalwart.clamav.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.clamav.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "stalwart.clamav.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.clamav.podSecurityContext | nindent 8 }}
+      {{- with .Values.clamav.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: clamav
           image: "{{ .Values.clamav.image.repository }}:{{ .Values.clamav.image.tag }}"
           imagePullPolicy: {{ .Values.clamav.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.clamav.securityContext | nindent 12 }}
           ports:
             - name: clamd
               containerPort: {{ .Values.clamav.service.port }}
@@ -28,6 +42,22 @@ spec:
             - name: clamav-db
               mountPath: /var/lib/clamav
             {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            - name: clamav-run
+              mountPath: /var/run/clamav
+          {{- with .Values.clamav.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.clamav.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.clamav.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.clamav.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -38,6 +68,22 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "stalwart.fullname" . }}-clamav
         {{- end }}
+        - name: tmp
+          emptyDir: {}
+        - name: clamav-run
+          emptyDir: {}
+      {{- with .Values.clamav.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clamav.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clamav.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
