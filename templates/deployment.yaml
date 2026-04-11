@@ -138,10 +138,10 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           volumeMounts:
+            - name: stalwart-home
+              mountPath: /opt/stalwart-mail
             - name: data
               mountPath: {{ .Values.stalwart.storage.dataDir }}
-            - name: etc
-              mountPath: /opt/stalwart-mail/etc
             - name: config
               mountPath: /opt/stalwart-mail/etc/config.toml
               subPath: config.toml
@@ -175,7 +175,7 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-        - name: etc
+        - name: stalwart-home
           emptyDir: {}
         - name: config
           configMap:

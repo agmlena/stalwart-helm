@@ -46,8 +46,6 @@ spec:
               mountPath: /tmp
             - name: snappymail-data
               mountPath: /var/lib/snappymail
-            - name: php-fpm-conf
-              mountPath: /usr/local/etc/php-fpm.d
             - name: php-run
               mountPath: /run
           {{- with .Values.webmail.resources }}
@@ -58,8 +56,6 @@ spec:
         - name: tmp
           emptyDir: {}
         - name: snappymail-data
-          emptyDir: {}
-        - name: php-fpm-conf
           emptyDir: {}
         - name: php-run
           emptyDir: {}

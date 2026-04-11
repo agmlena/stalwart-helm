@@ -412,7 +412,7 @@ webmail:
   # -- Container security context
   securityContext:
     allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
+    readOnlyRootFilesystem: false
     capabilities:
       drop: [ALL]
   # -- Image pull secrets
