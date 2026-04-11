@@ -378,7 +378,7 @@ webmail:
     # -- Image repository
     repository: djmaze/snappymail
     # -- Image tag
-    tag: "2.38.2"
+    tag: "v2.38.2"
     # -- Image pull policy
     pullPolicy: IfNotPresent
   # -- Number of replicas
@@ -438,7 +438,7 @@ clamav:
     # -- Image repository
     repository: clamav/clamav
     # -- Image tag
-    tag: "1.4"
+    tag: "1.5.2"
     # -- Image pull policy
     pullPolicy: IfNotPresent
   # -- Number of replicas
