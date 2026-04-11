@@ -27,6 +27,23 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.clamav.persistence.enabled }}
+      initContainers:
+        - name: fix-permissions
+          image: "{{ .Values.clamav.image.repository }}:{{ .Values.clamav.image.tag }}"
+          imagePullPolicy: {{ .Values.clamav.image.pullPolicy }}
+          command: ['sh', '-c', 'chown -R 100:101 /var/lib/clamav']
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, FOWNER]
+          volumeMounts:
+            - name: clamav-db
+              mountPath: /var/lib/clamav
+      {{- end }}
       containers:
         - name: clamav
           image: "{{ .Values.clamav.image.repository }}:{{ .Values.clamav.image.tag }}"

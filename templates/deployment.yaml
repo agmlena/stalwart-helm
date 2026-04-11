@@ -140,6 +140,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: {{ .Values.stalwart.storage.dataDir }}
+            - name: etc
+              mountPath: /opt/stalwart-mail/etc
             - name: config
               mountPath: /opt/stalwart-mail/etc/config.toml
               subPath: config.toml
@@ -173,6 +175,8 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        - name: etc
+          emptyDir: {}
         - name: config
           configMap:
             name: {{ include "stalwart.fullname" . }}
