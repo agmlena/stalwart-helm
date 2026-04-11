@@ -177,6 +177,10 @@ stalwart:
     # Stalwart validates OAUTHBEARER tokens by calling the provider's endpoint.
     # Mail clients must obtain their own tokens from the OIDC provider first.
     enabled: false
+    # -- When true (default), OIDC becomes the primary directory (storage.directory = "oidc").
+    # When false, the internal directory remains primary and OIDC is added as a
+    # supplementary authentication source for OAUTHBEARER token validation.
+    replaceDirectory: true
     # -- UserInfo or Token Introspection endpoint URL
     endpointUrl: ""
     # -- Endpoint method: `userinfo` or `introspect`
