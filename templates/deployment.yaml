@@ -39,21 +39,6 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        - name: copy-config
-          image: {{ include "stalwart.initImage" . }}
-          imagePullPolicy: {{ .Values.stalwart.initContainerImage.pullPolicy }}
-          command: ['sh', '-c']
-          args:
-            - |
-              mkdir -p /opt/stalwart-mail/etc
-              cp /config-ro/config.toml /opt/stalwart-mail/etc/config.toml
-              echo "Config copied."
-          volumeMounts:
-            - name: stalwart-home
-              mountPath: /opt/stalwart-mail
-            - name: config
-              mountPath: /config-ro
-              readOnly: true
       {{- if eq .Values.stalwart.storage.backend "postgres" }}
         - name: wait-for-postgres
           image: {{ include "stalwart.initImage" . }}
@@ -154,7 +139,11 @@ spec:
             {{- end }}
           volumeMounts:
             - name: stalwart-home
-              mountPath: /opt/stalwart-mail
+              mountPath: /opt/stalwart
+            - name: config
+              mountPath: /opt/stalwart/etc/config.toml
+              subPath: config.toml
+              readOnly: true
             - name: data
               mountPath: {{ .Values.stalwart.storage.dataDir }}
             - name: tmp

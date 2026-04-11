@@ -104,7 +104,7 @@ stalwart:
       timeout: "30s"
 
     # -- Local data directory inside the container (used by RocksDB, or for temp/cache)
-    dataDir: /opt/stalwart-mail/data
+    dataDir: /opt/stalwart/data
 
   # -- Local persistence. Not required with PostgreSQL backend (all state is in the DB).
   # Enable only if you need local disk for caching or if using RocksDB.

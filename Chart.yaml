@@ -2,7 +2,7 @@ apiVersion: v2
 name: stalwart-mail
 description: Stalwart Mail Server - full mail stack (SMTP, IMAP, JMAP, CalDAV, CardDAV) with optional webmail and antivirus
 type: application
-version: 0.1.7
+version: 0.1.8
 appVersion: "v0.15.5"
 kubeVersion: ">=1.21.0-0"
 home: https://stalw.art
