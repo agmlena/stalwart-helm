@@ -38,8 +38,31 @@ spec:
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if eq .Values.stalwart.storage.backend "postgres" }}
       initContainers:
+        - name: copy-config
+          image: {{ include "stalwart.initImage" . }}
+          imagePullPolicy: {{ .Values.stalwart.initContainerImage.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop: [ALL]
+          command: ['sh', '-c']
+          args:
+            - |
+              mkdir -p /opt/stalwart-mail/etc
+              cp /config-ro/config.toml /opt/stalwart-mail/etc/config.toml
+              echo "Config copied."
+          volumeMounts:
+            - name: stalwart-home
+              mountPath: /opt/stalwart-mail
+            - name: config
+              mountPath: /config-ro
+              readOnly: true
+      {{- if eq .Values.stalwart.storage.backend "postgres" }}
         - name: wait-for-postgres
           image: {{ include "stalwart.initImage" . }}
           imagePullPolicy: {{ .Values.stalwart.initContainerImage.pullPolicy }}
@@ -142,10 +165,6 @@ spec:
               mountPath: /opt/stalwart-mail
             - name: data
               mountPath: {{ .Values.stalwart.storage.dataDir }}
-            - name: config
-              mountPath: /opt/stalwart-mail/etc/config.toml
-              subPath: config.toml
-              readOnly: true
             - name: tmp
               mountPath: /tmp
             {{- with .Values.stalwart.extraVolumeMounts }}

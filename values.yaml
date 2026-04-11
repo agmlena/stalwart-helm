@@ -401,18 +401,14 @@ webmail:
   ingressPath: /webmail
   # -- Pod annotations
   podAnnotations: {}
-  # -- Pod-level security context
+  # -- Pod-level security context.
+  # SnappyMail entrypoint requires root to configure php-fpm/nginx, then drops privileges.
   podSecurityContext:
-    runAsNonRoot: true
-    runAsUser: 82
-    runAsGroup: 82
-    fsGroup: 82
     seccompProfile:
       type: RuntimeDefault
   # -- Container security context
   securityContext:
     allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
     capabilities:
       drop: [ALL]
   # -- Image pull secrets
