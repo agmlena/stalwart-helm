@@ -2,7 +2,7 @@ apiVersion: v2
 name: stalwart-mail
 description: Stalwart Mail Server - full mail stack (SMTP, IMAP, JMAP, CalDAV, CardDAV) with optional webmail and antivirus
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "0.14.0"
 kubeVersion: ">=1.21.0-0"
 home: https://stalw.art
@@ -27,8 +27,8 @@ annotations:
       url: https://stalw.art/docs/
   artifacthub.io/images: |
     - name: stalwart
-      image: stalwartlabs/stalwart:0.14.0
+      image: stalwartlabs/stalwart:v0.15.5
     - name: snappymail
-      image: djmaze/snappymail:2.38.2
+      image: djmaze/snappymail:v2.38.2
     - name: clamav
-      image: clamav/clamav:1.4
+      image: clamav/clamav:1.5.2
