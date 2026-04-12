@@ -44,6 +44,16 @@ data:
     bind = ["0.0.0.0:{{ .Values.stalwart.listeners.http.port }}"]
     protocol = "http"
 
+    {{- if and .Values.stalwart.security .Values.stalwart.security.allowedIps }}
+    [server.security]
+    allowed-ips = {{ .Values.stalwart.security.allowedIps | toJson }}
+    {{- end }}
+    
+    {{- if and .Values.stalwart.proxy .Values.stalwart.proxy.trustedNetworks }}
+    [server.proxy]
+    trusted-networks = {{ .Values.stalwart.proxy.trustedNetworks | toJson }}
+    {{- end }}
+
     {{- if eq .Values.stalwart.storage.backend "postgres" }}
     # ---- PostgreSQL store ----
     [store.db]
