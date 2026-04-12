@@ -248,15 +248,6 @@ stalwart:
       - "10.42.0.0/16"
       - "10.43.0.0/16"
 
-  # ---------------------------------------------------------------------------
-  # Proxy
-  # ---------------------------------------------------------------------------
-  proxy:
-    # -- Trusted proxy networks (CIDR) for Proxy Protocol / real-IP extraction
-    trustedNetworks:
-      - "10.42.0.0/16"
-      - "10.43.0.0/16"
-
   # -- Startup probe (allows slow first-boot initialization)
   startupProbe:
     httpGet:
