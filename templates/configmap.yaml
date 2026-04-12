@@ -8,6 +8,9 @@ data:
   config.toml: |
     [server]
     hostname = {{ .Values.hostname | quote }}
+    {{- if .Values.stalwart.security.allowedIp }}
+    allowed-ip = {{ .Values.stalwart.security.allowedIp | toJson }}
+    {{- end }}
 
     [server.listener.smtp]
     bind = ["0.0.0.0:{{ .Values.stalwart.listeners.smtp.port }}"]
@@ -43,6 +46,11 @@ data:
     [server.listener.http]
     bind = ["0.0.0.0:{{ .Values.stalwart.listeners.http.port }}"]
     protocol = "http"
+
+    {{- if .Values.stalwart.proxy.trustedNetworks }}
+    [server.proxy]
+    trusted-networks = {{ .Values.stalwart.proxy.trustedNetworks | toJson }}
+    {{- end }}
 
     {{- if eq .Values.stalwart.storage.backend "postgres" }}
     # ---- PostgreSQL store ----
