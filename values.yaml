@@ -243,19 +243,10 @@ stalwart:
   # Security
   # ---------------------------------------------------------------------------
   security:
-    # -- List of allowed IP ranges (CIDR) for the server
-    #allowedIps:
-    #  - "10.42.0.0/16"
-    #  - "10.43.0.0/16"
-  
-  # ---------------------------------------------------------------------------
-  # Proxy
-  # ---------------------------------------------------------------------------
-  proxy:
-    # -- List of trusted proxy networks (CIDR)
-    #trustedNetworks:
-    #  - "10.42.0.0/16"
-    #  - "10.43.0.0/16"
+    # -- IP addresses/ranges (CIDR) exempt from rate-limiting and auto-banning
+    allowedIp:
+      - "10.42.0.0/16"
+      - "10.43.0.0/16"
 
   # -- Startup probe (allows slow first-boot initialization)
   startupProbe:
