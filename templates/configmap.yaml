@@ -9,7 +9,7 @@ data:
     [server]
     hostname = {{ .Values.hostname | quote }}
     {{- if .Values.stalwart.security.allowedIp }}
-    allowed-ip = {{ .Values.stalwart.security.allowedIp | toJson }}
+    allowed-ip = { {{ .Values.stalwart.security.allowedIp | toJson | trimPrefix "[" | trimSuffix "]" }} }
     {{- end }}
 
     [server.listener.smtp]
@@ -49,7 +49,7 @@ data:
 
     {{- if .Values.stalwart.proxy.trustedNetworks }}
     [server.proxy]
-    trusted-networks = {{ .Values.stalwart.proxy.trustedNetworks | toJson }}
+    trusted-networks = { {{ .Values.stalwart.proxy.trustedNetworks | toJson | trimPrefix "[" | trimSuffix "]" }} }
     {{- end }}
 
     {{- if eq .Values.stalwart.storage.backend "postgres" }}
