@@ -248,29 +248,29 @@ stalwart:
       - "10.42.0.0/16"
       - "10.43.0.0/16"
 
-  # -- Startup probe (allows slow first-boot initialization)
+  # -- Startup probe (allows slow first-boot initialization).
+  # Uses exec instead of httpGet so the probe comes from localhost, avoiding
+  # conflict with server.proxy.trusted-networks (kubelet HTTP probes come from
+  # node IPs which Stalwart would expect PROXY protocol on).
   startupProbe:
-    httpGet:
-      path: /healthz/live
-      port: http
+    exec:
+      command: ['bash', '-c', 'exec 3<>/dev/tcp/localhost/8080; echo -e "GET /healthz/live HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3; read -r line <&3; exec 3<&-; echo "$line" | grep -q "200"']
     initialDelaySeconds: 5
     periodSeconds: 5
     failureThreshold: 24
 
   # -- Liveness probe
   livenessProbe:
-    httpGet:
-      path: /healthz/live
-      port: http
+    exec:
+      command: ['bash', '-c', 'exec 3<>/dev/tcp/localhost/8080; echo -e "GET /healthz/live HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3; read -r line <&3; exec 3<&-; echo "$line" | grep -q "200"']
     initialDelaySeconds: 10
     periodSeconds: 30
     failureThreshold: 3
 
   # -- Readiness probe
   readinessProbe:
-    httpGet:
-      path: /healthz/ready
-      port: http
+    exec:
+      command: ['bash', '-c', 'exec 3<>/dev/tcp/localhost/8080; echo -e "GET /healthz/ready HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3; read -r line <&3; exec 3<&-; echo "$line" | grep -q "200"']
     initialDelaySeconds: 5
     periodSeconds: 10
     failureThreshold: 3
