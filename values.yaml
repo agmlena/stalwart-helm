@@ -147,6 +147,9 @@ stalwart:
   # -- Pod annotations
   podAnnotations: {}
 
+  # -- Deployment annotations (e.g. stakater/reloader watch annotations)
+  deploymentAnnotations: {}
+
   # ---------------------------------------------------------------------------
   # Security (Pod Security Standards "restricted" profile by default)
   # ---------------------------------------------------------------------------

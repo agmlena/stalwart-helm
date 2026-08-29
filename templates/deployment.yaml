@@ -4,6 +4,10 @@ metadata:
   name: {{ include "stalwart.fullname" . }}
   labels:
     {{- include "stalwart.labels" . | nindent 4 }}
+  {{- with .Values.stalwart.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: {{ .Values.stalwart.replicas }}
   revisionHistoryLimit: {{ .Values.stalwart.revisionHistoryLimit }}

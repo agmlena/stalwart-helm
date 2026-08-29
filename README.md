@@ -302,6 +302,7 @@ All pods follow the Pod Security Standards **"restricted"** profile by default:
 | `stalwart.affinity` | Affinity rules | `{}` |
 | `stalwart.topologySpreadConstraints` | Topology spread constraints | `[]` |
 | `stalwart.podAnnotations` | Pod annotations | `{}` |
+| `stalwart.deploymentAnnotations` | Deployment annotations (e.g. stakater/reloader watch annotations) | `{}` |
 | `stalwart.podSecurityContext` | Pod security context | *restricted profile* |
 | `stalwart.securityContext` | Container security context | *restricted + NET_BIND_SERVICE* |
 | `stalwart.configOverrides` | Raw TOML appended to config | `""` |
